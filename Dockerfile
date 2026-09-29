@@ -28,7 +28,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-pip \
     python3-venv \
     golang-go \
-    && && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/*
 
 # Install Node.js (v20.x LTS) & npm cleanly via NodeSource
 # Install Node.js (v20.x LTS) & npm cleanly via NodeSource manual setup
