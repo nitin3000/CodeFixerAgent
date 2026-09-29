@@ -28,12 +28,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-pip \
     python3-venv \
     golang-go \
-    && rm -rf /lib/apt/lists/*
+    && && rm -rf /var/lib/apt/lists/*
 
 # Install Node.js (v20.x LTS) & npm cleanly via NodeSource
-RUN curl -fsSL https://nodesource.com | bash - \
-    && apt-get install -y node-cache nodejs \
-    && rm -rf /lib/apt/lists/*
+# Install Node.js (v20.x LTS) & npm cleanly via NodeSource manual setup
+RUN mkdir -p /etc/apt/keyrings \
+    && curl -fsSL https://nodesource.com | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
+    && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://nodesource.com nodistro main" | tee /etc/apt/keyrings/nodesource.list \
+    && apt-get update \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install global Python packages (like pytest) inside system scope safely
 RUN pip3 install --break-system-packages pytest
