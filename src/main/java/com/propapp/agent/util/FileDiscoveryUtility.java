@@ -2,8 +2,10 @@ package com.propapp.agent.util;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.propapp.agent.model.TargetDiscoveryResponse;
+import dev.langchain4j.data.message.UserMessage; // Added missing import
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.request.ResponseFormat;
+import dev.langchain4j.model.chat.request.ResponseFormatType;
 import dev.langchain4j.model.chat.request.json.JsonArraySchema;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import dev.langchain4j.model.chat.request.json.JsonSchema;
@@ -61,13 +63,19 @@ public class FileDiscoveryUtility {
                         .build())
                 .build();
 
-        ChatRequest request = ChatRequest.builder()
-                .messages(dev.langchain4j.data.message.UserMessage.from(prompt))
-                .responseFormat(ResponseFormat.JSON)
+        ResponseFormat responseFormat = ResponseFormat.builder()
+                .type(ResponseFormatType.JSON)
                 .jsonSchema(jsonSchema)
                 .build();
+        
+        // Fix 1: Wrap your prompt string inside an actual UserMessage object
+        ChatRequest chatRequest = ChatRequest.builder()
+                .messages(UserMessage.from(prompt)) 
+                .responseFormat(responseFormat)
+                .build();
 
-        ChatResponse response = model.chat(request);
+        // Fix 2: Change variable name from 'request' to 'chatRequest' to match your builder
+        ChatResponse response = model.chat(chatRequest);
         
         try {
             TargetDiscoveryResponse mappedResponse = objectMapper.readValue(response.aiMessage().text(), TargetDiscoveryResponse.class);
