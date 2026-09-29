@@ -17,9 +17,10 @@ FROM ubuntu:24.04
 # Avoid interactive prompts during installations
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install core system packages, Git, Java, Python, and Go
+# Install core system packages, Git, Java, Python, Go, AND gnupg
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    gnupg \
     git \
     ca-certificates \
     openjdk-17-jdk-headless \
@@ -30,8 +31,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     golang-go \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Node.js (v20.x LTS) & npm cleanly via NodeSource
-# Install Node.js (v20.x LTS) & npm cleanly via NodeSource manual setup
+# Install Node.js (v20.x LTS) & npm cleanly via deb.nodesource.com registry
 RUN mkdir -p /etc/apt/keyrings \
     && curl -fsSL https://nodesource.com | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
     && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://nodesource.com nodistro main" | tee /etc/apt/keyrings/nodesource.list \
