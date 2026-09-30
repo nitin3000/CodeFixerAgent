@@ -72,7 +72,20 @@ public class AutonomousBugFixerAgent {
                 TestResult reproductionRun = runEcosystemTests(executionWorkspace, strategy.getTestCommand());
                 brokenFiles = FileDiscoveryUtility.discoverBrokenFiles(reproductionRun.getOutput(), targetProjectDir);
             } else {
-                brokenFiles = FileDiscoveryUtility.discoverBrokenFiles(initialRun.getOutput(), targetProjectDir);
+                // 🛠️ FIX: Filter the massive log output to include ONLY lines containing compilation errors
+                String rawOutput = initialRun.getOutput();
+                String filteredErrors = java.util.Arrays.stream(rawOutput.split("\n"))
+                        .filter(line -> line.contains("[ERROR]") && (line.contains(".java:") || line.contains("expected")))
+                        .collect(Collectors.joining("\n"));
+
+                // Safe fallback: If filtering leaves it completely empty, use a small snippet of the log tail
+                if (filteredErrors.trim().isEmpty()) {
+                    System.out.println("⚠️ No explicit java line error markers found. Slicing log tail instead...");
+                    filteredErrors = rawOutput.length() > 2000 ? rawOutput.substring(rawOutput.length() - 2000) : rawOutput;
+                }
+
+                System.out.println("🧹 Log context scrubbed down to protect OpenAI TPM space.");
+                brokenFiles = FileDiscoveryUtility.discoverBrokenFiles(filteredErrors, targetProjectDir);
             }
 
             if (brokenFiles.isEmpty()) {
