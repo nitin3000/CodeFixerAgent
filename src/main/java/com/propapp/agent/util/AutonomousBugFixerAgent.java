@@ -18,23 +18,29 @@ public class AutonomousBugFixerAgent {
     private static final String OPENAI_API_KEY = System.getenv("OPENAI_API_KEY");
     private static final String GITHUB_TOKEN = System.getenv("GITHUB_TOKEN");
 
-    public static void orchestrateFullLifecycle(String bugDescription, String repoFullName, String cloneUrl) throws Exception {
+    public static void orchestrateFullLifecycle(String bugDescription, String repoFullName, String cloneUrl, String targetBranch) throws Exception {
         Path workspaceDir = Files.createTempDirectory("agent-polyglot-workspace-");
         File gitRootWorkspace = workspaceDir.toFile();
         File executionWorkspace = gitRootWorkspace;
         System.out.println("📦 Created ephemeral workspace: " + workspaceDir.toAbsolutePath());
 
+        // Safe fallback if branch parameter arrives null/empty
+        String branch = (targetBranch == null || targetBranch.trim().isEmpty()) ? "main" : targetBranch;
+
         try {
-            // 1. Clone repository into the root temporary folder
+            // 1. Clone repository directly targeting the active dynamic branch
             String authenticatedUrl = cloneUrl.replace("https://", "https://" + GITHUB_TOKEN + "@");
-            runSystemCommand(gitRootWorkspace, "git clone " + authenticatedUrl + " .");
+            System.out.println("🤖 Cloning specific branch [" + branch + "] from repository...");
+            
+            // Fix: Added '-b <branch> --single-branch' flags to pull the correct context instantly
+            runSystemCommand(gitRootWorkspace, "git clone -b " + branch + " --single-branch " + authenticatedUrl + " .");
 
             // 2. Target Workspace Resolution & Hardcoded Ecosystem Enforcement
             Path targetProjectDir = workspaceDir;
             if (Files.exists(workspaceDir.resolve("java/pom.xml"))) {
                 System.out.println("📂 Target subfolder found. Shifting context down to: /java");
                 targetProjectDir = workspaceDir.resolve("java");
-                executionWorkspace = targetProjectDir.toFile(); // Fix: Point execution workspace here
+                executionWorkspace = targetProjectDir.toFile(); 
             }
 
             // Create a custom anonymous strategy instance to force Maven compilation
@@ -54,7 +60,7 @@ public class AutonomousBugFixerAgent {
             System.out.println("🔄 Running initial test execution via command: " + strategy.getTestCommand());
             TestResult initialRun = runEcosystemTests(executionWorkspace, strategy.getTestCommand());
 
-            // 4. If tests pass cleanly, use the LLM to write a reproduction test case
+            // 4. Extract broken files based on execution logs
             List<TargetDiscoveryResponse.FailureTarget> brokenFiles;
             if (initialRun.isSuccessful()) {
                 System.out.println("🧪 Project passes cleanly. Instructing LLM to inject reproduction test cases...");
@@ -66,6 +72,8 @@ public class AutonomousBugFixerAgent {
 
             if (brokenFiles.isEmpty()) {
                 System.out.println("⚠️ Could not extract target files from error logs. Stopping.");
+                // Useful Debug: Print out what maven actually hit if it couldn't map files
+                System.out.println("📋 Raw Build Log Snapshot:\n" + initialRun.getOutput());
                 return;
             }
 
@@ -100,7 +108,8 @@ public class AutonomousBugFixerAgent {
 
             if (validationRun.isSuccessful()) {
                 System.out.println("🎉 Fix Verified! Generating PR branch...");
-                executeGitAndPullRequest(gitRootWorkspace, targetProjectDir, repoFullName, brokenFiles, bugDescription);
+                // Fix: Pass down the explicit branch context to merge against instead of forcing hardcoded "main"
+                executeGitAndPullRequest(gitRootWorkspace, targetProjectDir, repoFullName, brokenFiles, bugDescription, branch);
             } else {
                 System.out.println("❌ Patch validation run failed. Changes contain syntax errors.");
             }
