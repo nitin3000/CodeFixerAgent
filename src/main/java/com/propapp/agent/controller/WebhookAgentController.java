@@ -40,10 +40,16 @@ public class WebhookAgentController {
 
                 System.out.println("📬 Webhook received for Issue #" + issueNumber + " on repo: " + repoFullName);
 
+// 1. Extract the target branch string from your new structured webhook payload
+String targetBranch = rootNode.path("repository").path("default_branch").asText();
+if (targetBranch == null || targetBranch.isEmpty()) {
+    targetBranch = "main"; // Safe fallback
+}
+                
                 // Process asynchronously to return an immediate HTTP 202 Accepted response to GitHub
                 CompletableFuture.runAsync(() -> {
                     try {
-                        AutonomousBugFixerAgent.orchestrateFullLifecycle(fullBugDescription, repoFullName, cloneUrl);
+                        AutonomousBugFixerAgent.orchestrateFullLifecycle(fullBugDescription, repoFullName, cloneUrl, targetBranch);
                     } catch (Exception e) {
                         System.err.println("❌ Async orchestration lifecycle failure: " + e.getMessage());
                     }
