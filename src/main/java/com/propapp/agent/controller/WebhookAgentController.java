@@ -46,15 +46,12 @@ if (targetBranch == null || targetBranch.isEmpty()) {
     targetBranch = "main"; // Safe fallback
 }
                 
-                // Process asynchronously to return an immediate HTTP 202 Accepted response to GitHub
-                CompletableFuture.runAsync(() -> {
-                    try {
-                        AutonomousBugFixerAgent.orchestrateFullLifecycle(fullBugDescription, repoFullName, cloneUrl, targetBranch);
-                    } catch (Exception e) {
-                        System.err.println("❌ Async orchestration lifecycle failure: " + e.getMessage());
-                    }
-                });
-
+AutonomousBugFixerAgent.orchestrateFullLifecycle(
+    fullBugDescription, 
+    repoFullName, 
+    cloneUrl, 
+    targetBranch // 👈 ADD THIS PARAMETER
+);
                 return ResponseEntity.status(HttpStatus.ACCEPTED).body("Agent triggered successfully.");
             }
 
