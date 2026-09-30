@@ -34,7 +34,7 @@ public class AutonomousBugFixerAgent {
             if (Files.exists(workspaceDir.resolve("java/pom.xml"))) {
                 System.out.println("📂 Target subfolder found. Shifting context down to: /java");
                 targetProjectDir = workspaceDir.resolve("java");
-                workspace = targetProjectDir.toFile(); 
+                executionWorkspace = targetProjectDir.toFile(); // Fix: Point execution workspace here
             }
 
             // Create a custom anonymous strategy instance to force Maven compilation
@@ -100,7 +100,6 @@ public class AutonomousBugFixerAgent {
 
             if (validationRun.isSuccessful()) {
                 System.out.println("🎉 Fix Verified! Generating PR branch...");
-                // Note: Git commands must always be executed relative to the gitRootWorkspace (.git location)
                 executeGitAndPullRequest(gitRootWorkspace, targetProjectDir, repoFullName, brokenFiles, bugDescription);
             } else {
                 System.out.println("❌ Patch validation run failed. Changes contain syntax errors.");
@@ -142,7 +141,6 @@ public class AutonomousBugFixerAgent {
 
         runSystemCommand(gitRoot, "git checkout -b " + branchName);
         for (TargetDiscoveryResponse.FailureTarget target : targets) {
-            // Track the relative path from the actual git root repository structure
             Path absoluteFilePath = targetProjectDir.resolve(target.getFilePath());
             Path relativeToGitRoot = Paths.get(gitRoot.toURI()).relativize(absoluteFilePath);
             runSystemCommand(gitRoot, "git add " + relativeToGitRoot.toString().replace("\\", "/"));
