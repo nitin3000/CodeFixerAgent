@@ -128,19 +128,45 @@ public class AutonomousBugFixerAgent {
                         """.formatted(target.getFilePath(), cleanErrorReason, currentCode);
 
                 // 2. Call OpenAI passing both the strict system template and user request
+                // Send system and user instructions to the model
                 System.out.println("🧠 Prompting OpenAI for strict clean code patching...");
                 String patchedCode = model.generate(
                         dev.langchain4j.data.message.SystemMessage.from(systemInstruction),
                         dev.langchain4j.data.message.UserMessage.from(fixPrompt)
-                ).content().text();
+                ).content().text().trim();
                 
-                // 3. Keep the robust secondary safety strips intact
-                patchedCode = patchedCode.replaceAll("```[a-z]*|```", "").trim();
+                // ─── ADD THIS ROBUST EXTRACTOR FIX HERE ───
+                // If the model wrapped the code in markdown blocks, extract only the content inside the fences
+                if (patchedCode.contains("```java")) {
+                    System.out.println("✂️ Found ```java markdown block wrapper. Extracting inner source code array...");
+                    int startIndex = patchedCode.indexOf("```java") + 7;
+                    int endIndex = patchedCode.indexOf("```", startIndex);
+                    if (endIndex > startIndex) {
+                        patchedCode = patchedCode.substring(startIndex, endIndex).trim();
+                    }
+                } else if (patchedCode.contains("```")) {
+                    System.out.println("✂️ Found generic ``` markdown block wrapper. Extracting inner source code array...");
+                    int startIndex = patchedCode.indexOf("```") + 3;
+                    // Skip any language specifier word if present
+                    if (Character.isLetter(patchedCode.charAt(startIndex))) {
+                        while (startIndex < patchedCode.length() && !Character.isWhitespace(patchedCode.charAt(startIndex))) {
+                            startIndex++;
+                        }
+                    }
+                    int endIndex = patchedCode.indexOf("```", startIndex);
+                    if (endIndex > startIndex) {
+                        patchedCode = patchedCode.substring(startIndex, endIndex).trim();
+                    }
+                } else {
+                    // Fail-safe: If it has conversational prefix strings but no backticks, strip common wrapper text lines
+                    patchedCode = patchedCode.replaceAll("```[a-z]*|```", "").trim();
+                }
                 
+                // Write the filtered, clean Java text out to the physical file system path
                 Files.writeString(pathOfBrokenFile, patchedCode);
                 System.out.println("🛠️ Applied automated code patch to: " + target.getFilePath());
 
-            }
+           }
 
             // 6. Run final validation tests inside the subfolder structure
             System.out.println("🔬 Running final confirmation build execution...");
