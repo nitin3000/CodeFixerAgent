@@ -31,22 +31,18 @@ public class AutonomousBugFixerAgent {
             // 1. Clone repository directly targeting the active dynamic branch
             String authenticatedUrl = cloneUrl.replace("https://", "https://" + GITHUB_TOKEN + "@");
             System.out.println("🤖 Cloning specific branch [" + branch + "] from repository...");
-            
-            // Fix: Added '-b <branch> --single-branch' flags to pull the correct context instantly
             runSystemCommand(gitRootWorkspace, "git clone -b " + branch + " --single-branch " + authenticatedUrl + " .");
 
-            // 2. Target Workspace Resolution & Hardcoded Ecosystem Enforcement
+            // 2. Target Workspace Resolution (LOCKED TO ROOT)
+            // Force both target and execution contexts to remain at the absolute git root folder
             Path targetProjectDir = workspaceDir;
-            if (Files.exists(workspaceDir.resolve("java/pom.xml"))) {
-                System.out.println("📂 Target subfolder found. Shifting context down to: /java");
-                targetProjectDir = workspaceDir.resolve("java");
-                executionWorkspace = targetProjectDir.toFile(); 
-            }
+            executionWorkspace = gitRootWorkspace; 
+            System.out.println("🏠 Execution context locked to absolute Git root: " + executionWorkspace.getAbsolutePath());
 
             // Create a custom anonymous strategy instance to force Maven compilation
             LanguageStrategy strategy = new LanguageStrategy() {
                 @Override public String getEcosystemName() { return "Java (Maven - Hardcoded Bypass)"; }
-                @Override public String getTestCommand() { return "mvn clean package -DskipTests -Dmaven.repo.local=./.m2/repository";  }
+                @Override public String getTestCommand() { return "mvn clean package -DskipTests -Dmaven.repo.local=./.m2/repository"; }
             };
             System.out.println("🧬 Ecosystem Strategy Bypassed: " + strategy.getEcosystemName());
 
