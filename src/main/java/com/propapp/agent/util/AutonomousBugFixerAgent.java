@@ -239,8 +239,8 @@ public class AutonomousBugFixerAgent {
             runSystemCommand(gitRoot, "git add " + relativeToGitRoot.toString().replace("\\", "/"));
         }
         // Add these configuration executions right before running git commit
-runSystemCommand("git config --local user.email \"agent-bot@propapp.com\"");
-runSystemCommand("git config --local user.name \"Autonomous Bug Fixer Agent\"");
+runSystemCommand(gitRoot,"git config --local user.email \"agent-bot@propapp.com\"");
+runSystemCommand(gitRoot,"git config --local user.name \"Autonomous Bug Fixer Agent\"");
 
         runSystemCommand(gitRoot, "git commit -m \"fix: automated polyglot patch resolving build logs errors\"");
         runSystemCommand(gitRoot, "git push origin " + branchName);
