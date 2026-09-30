@@ -177,6 +177,8 @@ public class AutonomousBugFixerAgent {
                 executeGitAndPullRequest(gitRootWorkspace, targetProjectDir, repoFullName, brokenFiles, bugDescription, branch);
             } else {
                 System.out.println("❌ Patch validation run failed. Changes contain syntax errors.");
+                                System.out.println("📋 Validation Error Log Snapshot:\n" + validationRun.getOutput());
+
             }
 
         } finally {
