@@ -184,14 +184,28 @@ public class AutonomousBugFixerAgent {
 
             }
 
-        } finally {
-            // 7. Housekeeping delete loop
-            Files.walk(workspaceDir)
-                 .map(Path::toFile)
-                 .sorted((o1, o2) -> o2.compareTo(o1))
-                 .forEach(File::delete);
+        } 
+        finally {
+    // 7. Housekeeping delete loop
+    try {
+        if (Files.exists(workspaceDir)) {
+            try (java.util.stream.Stream<Path> walk = Files.walk(workspaceDir)) {
+                walk.sorted(java.util.Comparator.reverseOrder())
+                    .forEach(path -> {
+                        try {
+                            Files.deleteIfExists(path);
+                        } catch (java.io.IOException e) {
+                            // Catching locked files prevents a silent failure cascade
+                            System.err.println("⚠️ Could not delete file (locked or in-use): " + path);
+                        }
+                    });
+            }
             System.out.println("🗑️ Ephemeral workspace removed cleanly from disk.");
         }
+    } catch (java.io.IOException e) {
+        System.err.println("❌ Critical failure during housekeeping cleanup: " + e.getMessage());
+    }
+}
     }
 
     private static TestResult runEcosystemTests(File workspace, String testCommand) throws IOException, InterruptedException {
