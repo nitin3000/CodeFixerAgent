@@ -20,16 +20,24 @@ public class AutonomousBugFixerAgent {
 
     public static void orchestrateFullLifecycle(String bugDescription, String repoFullName, String cloneUrl) throws Exception {
         Path workspaceDir = Files.createTempDirectory("agent-polyglot-workspace-");
-        File workspace = workspaceDir.toFile();
-        System.out.println("📦 Created ephemeral workspace: " + workspace.getAbsolutePath());
+        File gitRootWorkspace = workspaceDir.toFile();
+        File executionWorkspace = gitRootWorkspace;
+        System.out.println("📦 Created ephemeral workspace: " + workspaceDir.toAbsolutePath());
 
         try {
-            // 1. Clone repository
+            // 1. Clone repository into the root temporary folder
             String authenticatedUrl = cloneUrl.replace("https://", "https://" + GITHUB_TOKEN + "@");
-            runSystemCommand(workspace, "git clone " + authenticatedUrl + " .");
+            runSystemCommand(gitRootWorkspace, "git clone " + authenticatedUrl + " .");
 
-            // 2. Identify strategy
-            LanguageStrategy strategy = BuildEngineSelector.detectLanguage(workspaceDir);
+            // 2. Identify strategy & apply dynamic subdirectory fallback for nested /java folders
+            Path targetProjectDir = workspaceDir;
+            if (!Files.exists(workspaceDir.resolve("pom.xml")) && Files.exists(workspaceDir.resolve("java/pom.xml"))) {
+                System.out.println("📂 Subfolder configuration detected. Shifting project context down to: /java");
+                targetProjectDir = workspaceDir.resolve("java");
+                executionWorkspace = targetProjectDir.toFile(); // Re-point ecosystem test executors here
+            }
+
+            LanguageStrategy strategy = BuildEngineSelector.detectLanguage(targetProjectDir);
             System.out.println("🧬 Detected Project Ecosystem: " + strategy.getEcosystemName());
 
             OpenAiChatModel model = OpenAiChatModel.builder()
@@ -38,19 +46,18 @@ public class AutonomousBugFixerAgent {
                     .temperature(0.1)
                     .build();
 
-            // 3. Run initial test verification
+            // 3. Run initial test verification inside the verified execution directory
             System.out.println("🔄 Running initial test execution via command: " + strategy.getTestCommand());
-            TestResult initialRun = runEcosystemTests(workspace, strategy.getTestCommand());
+            TestResult initialRun = runEcosystemTests(executionWorkspace, strategy.getTestCommand());
 
-            // 4. If tests pass cleanly, use the LLM to write a reproduction test first based on the bug ticket descriptions
+            // 4. If tests pass cleanly, use the LLM to write a reproduction test case
             List<TargetDiscoveryResponse.FailureTarget> brokenFiles;
             if (initialRun.isSuccessful()) {
                 System.out.println("🧪 Project passes cleanly. Instructing LLM to inject reproduction test cases...");
-                // Write a test logic block... (omitted for brevity, maps out file target writes)
-                TestResult reproductionRun = runEcosystemTests(workspace, strategy.getTestCommand());
-                brokenFiles = FileDiscoveryUtility.discoverBrokenFiles(reproductionRun.getOutput(), workspaceDir);
+                TestResult reproductionRun = runEcosystemTests(executionWorkspace, strategy.getTestCommand());
+                brokenFiles = FileDiscoveryUtility.discoverBrokenFiles(reproductionRun.getOutput(), targetProjectDir);
             } else {
-                brokenFiles = FileDiscoveryUtility.discoverBrokenFiles(initialRun.getOutput(), workspaceDir);
+                brokenFiles = FileDiscoveryUtility.discoverBrokenFiles(initialRun.getOutput(), targetProjectDir);
             }
 
             if (brokenFiles.isEmpty()) {
@@ -58,9 +65,15 @@ public class AutonomousBugFixerAgent {
                 return;
             }
 
-            // 5. Apply the patches loop
+            // 5. Apply the patches loop relative to our targeted project subfolder path
             for (TargetDiscoveryResponse.FailureTarget target : brokenFiles) {
-                Path pathOfBrokenFile = workspaceDir.resolve(target.getFilePath());
+                Path pathOfBrokenFile = targetProjectDir.resolve(target.getFilePath());
+                
+                if (!Files.exists(pathOfBrokenFile)) {
+                    System.out.println("⚠️ File not found at resolved path: " + pathOfBrokenFile.toAbsolutePath());
+                    continue;
+                }
+
                 String currentCode = Files.readString(pathOfBrokenFile);
 
                 String fixPrompt = """
@@ -77,13 +90,14 @@ public class AutonomousBugFixerAgent {
                 System.out.println("🛠️ Applied automated code patch to: " + target.getFilePath());
             }
 
-            // 6. Run final validation tests
+            // 6. Run final validation tests inside the subfolder structure
             System.out.println("🔬 Running final confirmation build execution...");
-            TestResult validationRun = runEcosystemTests(workspace, strategy.getTestCommand());
+            TestResult validationRun = runEcosystemTests(executionWorkspace, strategy.getTestCommand());
 
             if (validationRun.isSuccessful()) {
                 System.out.println("🎉 Fix Verified! Generating PR branch...");
-                executeGitAndPullRequest(workspace, repoFullName, brokenFiles, bugDescription);
+                // Note: Git commands must always be executed relative to the gitRootWorkspace (.git location)
+                executeGitAndPullRequest(gitRootWorkspace, targetProjectDir, repoFullName, brokenFiles, bugDescription);
             } else {
                 System.out.println("❌ Patch validation run failed. Changes contain syntax errors.");
             }
@@ -119,15 +133,18 @@ public class AutonomousBugFixerAgent {
         }
     }
 
-    private static void executeGitAndPullRequest(File workspace, String repoFullName, List<TargetDiscoveryResponse.FailureTarget> targets, String bugDescription) throws Exception {
+    private static void executeGitAndPullRequest(File gitRoot, Path targetProjectDir, String repoFullName, List<TargetDiscoveryResponse.FailureTarget> targets, String bugDescription) throws Exception {
         String branchName = "fix/agent-polyglot-patch-" + System.currentTimeMillis() / 1000;
 
-        runSystemCommand(workspace, "git checkout -b " + branchName);
+        runSystemCommand(gitRoot, "git checkout -b " + branchName);
         for (TargetDiscoveryResponse.FailureTarget target : targets) {
-            runSystemCommand(workspace, "git add " + target.getFilePath());
+            // Track the relative path from the actual git root repository structure
+            Path absoluteFilePath = targetProjectDir.resolve(target.getFilePath());
+            Path relativeToGitRoot = Paths.get(gitRoot.toURI()).relativize(absoluteFilePath);
+            runSystemCommand(gitRoot, "git add " + relativeToGitRoot.toString().replace("\\", "/"));
         }
-        runSystemCommand(workspace, "git commit -m \"fix: automated polyglot patch resolving build logs errors\"");
-        runSystemCommand(workspace, "git push origin " + branchName);
+        runSystemCommand(gitRoot, "git commit -m \"fix: automated polyglot patch resolving build logs errors\"");
+        runSystemCommand(gitRoot, "git push origin " + branchName);
 
         GitHub github = new GitHubBuilder().withOAuthToken(GITHUB_TOKEN).build();
         GHRepository repository = github.getRepository(repoFullName);
