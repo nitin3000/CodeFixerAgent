@@ -82,6 +82,7 @@ public class AutonomousBugFixerAgent {
             }
 
             // 5. Apply the patches loop relative to our targeted project subfolder path
+// 5. Apply the patches loop relative to our targeted project subfolder path
             for (TargetDiscoveryResponse.FailureTarget target : brokenFiles) {
                 Path pathOfBrokenFile = targetProjectDir.resolve(target.getFilePath());
                 
@@ -92,6 +93,13 @@ public class AutonomousBugFixerAgent {
 
                 String currentCode = Files.readString(pathOfBrokenFile);
 
+                // FIX: Isolate or truncate the error reason so it doesn't dump the whole log file into OpenAI
+                String cleanErrorReason = target.getErrorReason();
+                if (cleanErrorReason != null && cleanErrorReason.length() > 1000) {
+                    System.out.println("✂️ Truncating massive error reason string to protect OpenAI TPM limits...");
+                    cleanErrorReason = cleanErrorReason.substring(0, 1000) + "\n...[Truncated for Size Constraint]...";
+                }
+
                 String fixPrompt = """
                         Fix the compilation error or failing test logic for this specific file.
                         FILE PATH: %s
@@ -99,7 +107,7 @@ public class AutonomousBugFixerAgent {
                         CURRENT CODE:
                         %s
                         Return ONLY the clean updated code. No markdown decorations or wrapper fences.
-                        """.formatted(target.getFilePath(), target.getErrorReason(), currentCode);
+                        """.formatted(target.getFilePath(), cleanErrorReason, currentCode);
 
                 String patchedCode = model.generate(fixPrompt).replaceAll("```[a-z]*|```", "").trim();
                 Files.writeString(pathOfBrokenFile, patchedCode);
