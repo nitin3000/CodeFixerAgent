@@ -63,19 +63,26 @@ public class FileDiscoveryUtility {
                         .build())
                 .build();
 
-        ResponseFormat responseFormat = ResponseFormat.builder()
-                .type(ResponseFormatType.JSON)
-                .jsonSchema(jsonSchema)
-                .build();
-        
-        // Fix 1: Wrap your prompt string inside an actual UserMessage object
-        ChatRequest chatRequest = ChatRequest.builder()
-                .messages(UserMessage.from(prompt)) 
-                .responseFormat(responseFormat)
-                .build();
+        // Fix 1: Ensure the underlying jsonSchema explicitly defines a name
+JsonSchema namedSchema = JsonSchema.builder()
+        .name("BugFixerResponseSchema") // <-- REQUIRED: Must be alphanumeric with no spaces
+        .rootElement(jsonSchema.rootElement()) // Extract the existing root element structure
+        .build();
 
-        // Fix 2: Change variable name from 'request' to 'chatRequest' to match your builder
-        ChatResponse response = model.chat(chatRequest);
+// Fix 2: Pass the newly named schema into the response format
+ResponseFormat responseFormat = ResponseFormat.builder()
+        .type(ResponseFormatType.JSON)
+        .jsonSchema(namedSchema) // Use the schema containing the mandatory name property
+        .build();
+
+// Wrap your prompt string inside an actual UserMessage object
+ChatRequest chatRequest = ChatRequest.builder()
+        .messages(UserMessage.from(prompt)) 
+        .responseFormat(responseFormat)
+        .build();
+
+// Execute the chat request using the corrected variable name
+ChatResponse response = model.chat(chatRequest);
         
         try {
             TargetDiscoveryResponse mappedResponse = objectMapper.readValue(response.aiMessage().text(), TargetDiscoveryResponse.class);
