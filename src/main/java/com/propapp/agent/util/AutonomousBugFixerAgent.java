@@ -46,10 +46,11 @@ public class AutonomousBugFixerAgent {
             // Create a custom anonymous strategy instance to force Maven compilation
             LanguageStrategy strategy = new LanguageStrategy() {
                 @Override public String getEcosystemName() { return "Java (Maven - Hardcoded Bypass)"; }
-                @Override public String getTestCommand() { return "mvn clean package -DskipTests"; }
+                @Override public String getTestCommand() { return "mvn clean package -DskipTests -Dmaven.repo.local=./.m2/repository";  }
             };
             System.out.println("🧬 Ecosystem Strategy Bypassed: " + strategy.getEcosystemName());
 
+            
             OpenAiChatModel model = OpenAiChatModel.builder()
                     .apiKey(OPENAI_API_KEY)
                     .modelName("gpt-4o")
