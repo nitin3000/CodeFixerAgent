@@ -106,12 +106,13 @@ public class AutonomousBugFixerAgent {
 
                 String currentCode = Files.readString(pathOfBrokenFile);
 
-                // FIX: Isolate or truncate the error reason so it doesn't dump the whole log file into OpenAI
-                String cleanErrorReason = target.getErrorReason();
-                if (cleanErrorReason != null && cleanErrorReason.length() > 1000) {
-                    System.out.println("✂️ Truncating massive error reason string to protect OpenAI TPM limits...");
-                    cleanErrorReason = cleanErrorReason.substring(0, 1000) + "\n...[Truncated for Size Constraint]...";
-                }
+                // 1. Build a strict system instruction to lock the model behavior
+                String systemInstruction = """
+                        You are an automated software repair engine. 
+                        Your output MUST contain ONLY valid Java source code.
+                        Do NOT include any conversational text, explanations, greetings, or notes.
+                        Do NOT wrap your code in markdown code blocks or backtick fences (```java).
+                        """;
 
                 String fixPrompt = """
                         Fix the compilation error or failing test logic for this specific file.
@@ -119,12 +120,21 @@ public class AutonomousBugFixerAgent {
                         ERROR REASON: %s
                         CURRENT CODE:
                         %s
-                        Return ONLY the clean updated code. No markdown decorations or wrapper fences.
                         """.formatted(target.getFilePath(), cleanErrorReason, currentCode);
 
-                String patchedCode = model.generate(fixPrompt).replaceAll("```[a-z]*|```", "").trim();
+                // 2. Call OpenAI passing both the strict system template and user request
+                System.out.println("🧠 Prompting OpenAI for strict clean code patching...");
+                String patchedCode = model.generate(
+                        dev.langchain4j.data.message.SystemMessage.from(systemInstruction),
+                        dev.langchain4j.data.message.UserMessage.from(fixPrompt)
+                ).content().text();
+                
+                // 3. Keep the robust secondary safety strips intact
+                patchedCode = patchedCode.replaceAll("```[a-z]*|```", "").trim();
+                
                 Files.writeString(pathOfBrokenFile, patchedCode);
                 System.out.println("🛠️ Applied automated code patch to: " + target.getFilePath());
+
             }
 
             // 6. Run final validation tests inside the subfolder structure
