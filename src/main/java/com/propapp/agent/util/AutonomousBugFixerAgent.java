@@ -243,8 +243,16 @@ runSystemCommand(gitRoot,"git config --local user.email \"agent-bot@propapp.com\
 runSystemCommand(gitRoot,"git config --local user.name \"Autonomous Bug Fixer Agent\"");
 
         runSystemCommand(gitRoot, "git commit -m \"fix: automated polyglot patch resolving build logs errors\"");
-        runSystemCommand(gitRoot, "git push origin " + branchName);
-
+        // Check the token variable read from System.getenv("GITHUB_TOKEN")
+if (GITHUB_TOKEN != null && !GITHUB_TOKEN.trim().isEmpty()) {
+    System.out.println("🔐 Authenticating push utilizing injected GITHUB_TOKEN context...");
+    // Replace 'origin' with the fully authenticated HTTPS URL pattern
+    String authUrl = "https://x-access-token:" + GITHUB_TOKEN.trim() + "@://github.com";
+    runSystemCommand(gitRoot, "git push " + authUrl + " " + branchName);
+} else {
+    System.err.println("⚠️ GITHUB_TOKEN environment variable is not populated. Attempting fallback...");
+    runSystemCommand(gitRoot, "git push origin " + branchName);
+}
         GitHub github = new GitHubBuilder().withOAuthToken(GITHUB_TOKEN).build();
         GHRepository repository = github.getRepository(repoFullName);
         
