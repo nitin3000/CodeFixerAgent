@@ -145,28 +145,28 @@ public class AutonomousBugFixerAgent {
         }
     }
 
-    private static void executeGitAndPullRequest(File gitRoot, Path targetProjectDir, String repoFullName, List<TargetDiscoveryResponse.FailureTarget> targets, String bugDescription) throws Exception {
-        String branchName = "fix/agent-polyglot-patch-" + System.currentTimeMillis() / 1000;
+private static void executeGitAndPullRequest(File gitRoot, Path targetProjectDir, String repoFullName, List<TargetDiscoveryResponse.FailureTarget> targets, String bugDescription, String targetBranch) throws Exception {
+    String branchName = "fix/agent-polyglot-patch-" + System.currentTimeMillis() / 1000;
 
-        runSystemCommand(gitRoot, "git checkout -b " + branchName);
-        for (TargetDiscoveryResponse.FailureTarget target : targets) {
-            Path absoluteFilePath = targetProjectDir.resolve(target.getFilePath());
-            Path relativeToGitRoot = Paths.get(gitRoot.toURI()).relativize(absoluteFilePath);
-            runSystemCommand(gitRoot, "git add " + relativeToGitRoot.toString().replace("\\", "/"));
-        }
-        runSystemCommand(gitRoot, "git commit -m \"fix: automated polyglot patch resolving build logs errors\"");
-        runSystemCommand(gitRoot, "git push origin " + branchName);
-
-        GitHub github = new GitHubBuilder().withOAuthToken(GITHUB_TOKEN).build();
-        GHRepository repository = github.getRepository(repoFullName);
-        
-        repository.createPullRequest(
-                "🤖 Polyglot Agent Auto-Fix Patch",
-                branchName,
-                "main",
-                "### 🤖 Automated Bug Fix Execution Summary\n\n**Bug Ticket:**\n" + bugDescription
-        );
+    runSystemCommand(gitRoot, "git checkout -b " + branchName);
+    for (TargetDiscoveryResponse.FailureTarget target : targets) {
+        Path absoluteFilePath = targetProjectDir.resolve(target.getFilePath());
+        Path relativeToGitRoot = Paths.get(gitRoot.toURI()).relativize(absoluteFilePath);
+        runSystemCommand(gitRoot, "git add " + relativeToGitRoot.toString().replace("\\", "/"));
     }
+    runSystemCommand(gitRoot, "git commit -m \"fix: automated polyglot patch resolving build logs errors\"");
+    runSystemCommand(gitRoot, "git push origin " + branchName);
+
+    GitHub github = new GitHubBuilder().withOAuthToken(GITHUB_TOKEN).build();
+    GHRepository repository = github.getRepository(repoFullName);
+    
+    repository.createPullRequest(
+            "🤖 Polyglot Agent Auto-Fix Patch",
+            branchName,
+            targetBranch, // 👈 Fix: Changed from hardcoded "main" to target branch
+            "### 🤖 Automated Bug Fix Execution Summary\n\n**Bug Ticket:**\n" + bugDescription
+    );
+}
 
     private static void runSystemCommand(File workspace, String command) throws IOException, InterruptedException {
         boolean isWindows = System.getProperty("os.name").toLowerCase().contains("win");
