@@ -251,7 +251,7 @@ runSystemCommand(gitRoot,"git config --local user.name \"Autonomous Bug Fixer Ag
             System.out.println("🔐 Authenticating push utilizing injected GITHUB_TOKEN context...");
             
             // Construct a perfectly valid, fully qualified Git remote repository URL 
-            String authUrl = "https://x-access-token:" + runtimeToken.trim() + "@://github.com/" + repoFullName + ".git";
+            String authUrl = "https://x-access-token:" + runtimeToken.trim() + "@github.com/" + repoFullName + ".git";
             runSystemCommand(gitRoot, "git push " + authUrl + " " + branchName);
         } else {
             System.err.println("⚠️ GITHUB_TOKEN environment variable is not populated. Attempting fallback...");
