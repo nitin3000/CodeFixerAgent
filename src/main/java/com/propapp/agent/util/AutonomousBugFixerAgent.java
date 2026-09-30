@@ -34,19 +34,27 @@ public class AutonomousBugFixerAgent {
             runSystemCommand(gitRootWorkspace, "git clone -b " + branch + " --single-branch " + authenticatedUrl + " .");
 
             // 2. Target Workspace Resolution (LOCKED TO ROOT)
-            // Force both target and execution contexts to remain at the absolute git root folder
             Path targetProjectDir = workspaceDir;
             executionWorkspace = gitRootWorkspace; 
             System.out.println("🏠 Execution context locked to absolute Git root: " + executionWorkspace.getAbsolutePath());
 
+            // Capture workspaceDir in a final variable for the anonymous strategy access closure
+            final Path finalWorkspaceDir = workspaceDir;
+
             // Create a custom anonymous strategy instance to force Maven compilation
             LanguageStrategy strategy = new LanguageStrategy() {
                 @Override public String getEcosystemName() { return "Java (Maven - Hardcoded Bypass)"; }
-                @Override public String getTestCommand() { return "mvn clean package -DskipTests -Dmaven.repo.local=./.m2/repository"; }
+                @Override public String getTestCommand() { 
+                    // Programmatically override if root pom is missing but subdirectory java pom exists
+                    if (Files.exists(finalWorkspaceDir.resolve("java/pom.xml"))) {
+                        System.out.println("🎯 Dynamic override: Found 'java/pom.xml'. Injecting -f targeting switch.");
+                        return "mvn -f java/pom.xml clean package -DskipTests -Dmaven.repo.local=./.m2/repository";
+                    }
+                    return "mvn clean package -DskipTests -Dmaven.repo.local=./.m2/repository"; 
+                }
             };
             System.out.println("🧬 Ecosystem Strategy Bypassed: " + strategy.getEcosystemName());
 
-            
             OpenAiChatModel model = OpenAiChatModel.builder()
                     .apiKey(OPENAI_API_KEY)
                     .modelName("gpt-4o")
@@ -69,7 +77,6 @@ public class AutonomousBugFixerAgent {
 
             if (brokenFiles.isEmpty()) {
                 System.out.println("⚠️ Could not extract target files from error logs. Stopping.");
-                // Useful Debug: Print out what maven actually hit if it couldn't map files
                 System.out.println("📋 Raw Build Log Snapshot:\n" + initialRun.getOutput());
                 return;
             }
@@ -105,7 +112,6 @@ public class AutonomousBugFixerAgent {
 
             if (validationRun.isSuccessful()) {
                 System.out.println("🎉 Fix Verified! Generating PR branch...");
-                // Fix: Pass down the explicit branch context to merge against instead of forcing hardcoded "main"
                 executeGitAndPullRequest(gitRootWorkspace, targetProjectDir, repoFullName, brokenFiles, bugDescription, branch);
             } else {
                 System.out.println("❌ Patch validation run failed. Changes contain syntax errors.");
@@ -142,41 +148,56 @@ public class AutonomousBugFixerAgent {
         }
     }
 
-private static void executeGitAndPullRequest(File gitRoot, Path targetProjectDir, String repoFullName, List<TargetDiscoveryResponse.FailureTarget> targets, String bugDescription, String targetBranch) throws Exception {
-    String branchName = "fix/agent-polyglot-patch-" + System.currentTimeMillis() / 1000;
+    private static void executeGitAndPullRequest(File gitRoot, Path targetProjectDir, String repoFullName, List<TargetDiscoveryResponse.FailureTarget> targets, String bugDescription, String targetBranch) throws Exception {
+        String branchName = "fix/agent-polyglot-patch-" + System.currentTimeMillis() / 1000;
 
-    runSystemCommand(gitRoot, "git checkout -b " + branchName);
-    for (TargetDiscoveryResponse.FailureTarget target : targets) {
-        Path absoluteFilePath = targetProjectDir.resolve(target.getFilePath());
-        Path relativeToGitRoot = Paths.get(gitRoot.toURI()).relativize(absoluteFilePath);
-        runSystemCommand(gitRoot, "git add " + relativeToGitRoot.toString().replace("\\", "/"));
+        runSystemCommand(gitRoot, "git checkout -b " + branchName);
+        for (TargetDiscoveryResponse.FailureTarget target : targets) {
+            Path absoluteFilePath = targetProjectDir.resolve(target.getFilePath());
+            Path relativeToGitRoot = Paths.get(gitRoot.toURI()).relativize(absoluteFilePath);
+            runSystemCommand(gitRoot, "git add " + relativeToGitRoot.toString().replace("\\", "/"));
+        }
+        runSystemCommand(gitRoot, "git commit -m \"fix: automated polyglot patch resolving build logs errors\"");
+        runSystemCommand(gitRoot, "git push origin " + branchName);
+
+        GitHub github = new GitHubBuilder().withOAuthToken(GITHUB_TOKEN).build();
+        GHRepository repository = github.getRepository(repoFullName);
+        
+        repository.createPullRequest(
+                "🤖 Polyglot Agent Auto-Fix Patch",
+                branchName,
+                targetBranch,
+                "### 🤖 Automated Bug Fix Execution Summary\n\n**Bug Ticket:**\n" + bugDescription
+        );
     }
-    runSystemCommand(gitRoot, "git commit -m \"fix: automated polyglot patch resolving build logs errors\"");
-    runSystemCommand(gitRoot, "git push origin " + branchName);
 
-    GitHub github = new GitHubBuilder().withOAuthToken(GITHUB_TOKEN).build();
-    GHRepository repository = github.getRepository(repoFullName);
-    
-    repository.createPullRequest(
-            "🤖 Polyglot Agent Auto-Fix Patch",
-            branchName,
-            targetBranch, // 👈 Fix: Changed from hardcoded "main" to target branch
-            "### 🤖 Automated Bug Fix Execution Summary\n\n**Bug Ticket:**\n" + bugDescription
-    );
-}
-
-    private static void runSystemCommand(File workspace, String command) throws IOException, InterruptedException {
+    private static void runSystemCommand(File workingDir, String command) throws IOException, InterruptedException {
         boolean isWindows = System.getProperty("os.name").toLowerCase().contains("win");
-        ProcessBuilder pb = isWindows ? new ProcessBuilder("cmd.exe", "/c", command) : new ProcessBuilder("sh", "-c", command);
-        pb.directory(workspace);
-        pb.start().waitFor();
+        ProcessBuilder builder = new ProcessBuilder();
+        builder.directory(workingDir);
+
+        if (isWindows) {
+            builder.command("cmd.exe", "/c", command);
+        } else {
+            builder.command("sh", "-c", command);
+        }
+
+        Process process = builder.start();
+        int exitCode = process.waitFor();
+        if (exitCode != 0) {
+            throw new RuntimeException("Command execution failed with exit code " + exitCode + ": " + command);
+        }
     }
 
-    private static class TestResult {
+    public static class TestResult {
         private final boolean success;
         private final String output;
-        public TestResult(boolean success, String output) { this.success = success; this.output = output; }
-        public boolean isSuccessful() { return success; }
-        public String getOutput() { return output; }
-    }
+
+public TestResult(boolean success, String output) {
+this.success = success;
+this.output = output;
+}
+public boolean isSuccessful() { return success; }
+public String getOutput() { return output; }
+}
 }
