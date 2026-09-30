@@ -74,6 +74,8 @@ public class AutonomousBugFixerAgent {
             } else {
                 // 🛠️ FIX: Filter the massive log output to include ONLY lines containing compilation errors
                 String rawOutput = initialRun.getOutput();
+                 System.out.println("📋 Inital Error Log Snapshot:\n" + initialRun.getOutput());
+                
                 String filteredErrors = java.util.Arrays.stream(rawOutput.split("\n"))
                         .filter(line -> line.contains("[ERROR]") && (line.contains(".java:") || line.contains("expected")))
                         .collect(Collectors.joining("\n"));
@@ -86,6 +88,7 @@ public class AutonomousBugFixerAgent {
 
                 System.out.println("🧹 Log context scrubbed down to protect OpenAI TPM space.");
                 brokenFiles = FileDiscoveryUtility.discoverBrokenFiles(filteredErrors, targetProjectDir);
+                
             }
 
             if (brokenFiles.isEmpty()) {
