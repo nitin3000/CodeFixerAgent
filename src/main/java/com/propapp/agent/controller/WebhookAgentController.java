@@ -1,8 +1,8 @@
 package com.propapp.agent.controller;
 
+import com.propapp.agent.util.AutonomousBugFixerAgent;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.propapp.agent.util.AutonomousBugFixerAgent;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -40,19 +40,33 @@ public class WebhookAgentController {
 
                 System.out.println("📬 Webhook received for Issue #" + issueNumber + " on repo: " + repoFullName);
 
-// 1. Extract the target branch string from your new structured webhook payload
-String targetBranch = rootNode.path("repository").path("default_branch").asText();
-if (targetBranch == null || targetBranch.isEmpty()) {
-    targetBranch = "main"; // Safe fallback
-}
+                // 1. Extract the target branch string from your structured webhook payload
+                String targetBranch = rootNode.path("repository").path("default_branch").asText();
+                if (targetBranch == null || targetBranch.trim().isEmpty()) {
+                    targetBranch = "main"; // Safe fallback
+                }
                 
-AutonomousBugFixerAgent.orchestrateFullLifecycle(
-    fullBugDescription, 
-    repoFullName, 
-    cloneUrl, 
-    targetBranch // 👈 ADD THIS PARAMETER
-);
-                return ResponseEntity.status(HttpStatus.ACCEPTED).body("Agent triggered successfully.");
+                // Final copies of values for safe multi-threaded memory access closure boundaries
+                final String finalBugDesc = fullBugDescription;
+                final String finalRepo = repoFullName;
+                final String finalUrl = cloneUrl;
+                final String finalBranch = targetBranch;
+
+                // 2. Offload the heavy multi-minute execution sequence to a background daemon thread
+                CompletableFuture.runAsync(() -> {
+                    try {
+                        System.out.println("🚀 Background thread spun up. Launching self-healing orchestration loop...");
+                        AutonomousBugFixerAgent.orchestrateFullLifecycle(finalBugDesc, finalRepo, finalUrl, finalBranch);
+                        System.out.println("🏁 Background thread successfully completed full lifecycle loop.");
+                    } catch (Exception e) {
+                        System.err.println("❌ Critical failure inside autonomous background orchestration worker thread: " + e.getMessage());
+                        e.printStackTrace();
+                    }
+                });
+
+                // 3. IMMEDIATELY return HTTP 202 Accepted to release the GitHub Actions network runner hook
+                System.out.println("✅ Request acknowledged safely. Returning HTTP 202 status code to caller.");
+                return ResponseEntity.status(HttpStatus.ACCEPTED).body("Agent triggered successfully. Processing auto-repair in the background.");
             }
 
             return ResponseEntity.ok("Event ignored: Issue action was " + action);
