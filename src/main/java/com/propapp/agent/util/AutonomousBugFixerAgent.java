@@ -113,6 +113,11 @@ public class AutonomousBugFixerAgent {
                         Do NOT include any conversational text, explanations, greetings, or notes.
                         Do NOT wrap your code in markdown code blocks or backtick fences (```java).
                         """;
+    String cleanErrorReason = target.getErrorReason();
+    if (cleanErrorReason != null && cleanErrorReason.length() > 800) {
+        System.out.println("✂️ Truncating massive error reason context to fit OpenAI sandbox TPM...");
+        cleanErrorReason = cleanErrorReason.substring(0, 800) + "\n...[Truncated for size limit]...";
+    }
 
                 String fixPrompt = """
                         Fix the compilation error or failing test logic for this specific file.
