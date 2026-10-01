@@ -18,6 +18,45 @@ public class AutonomousBugFixerAgent {
     private static final String OPENAI_API_KEY = System.getenv("OPENAI_API_KEY");
     private static final String GITHUB_TOKEN = System.getenv("GITHUB_TOKEN");
 
+    public String askLLMToFixBug(String bugDescription, String sourceCode, String testFailureLogs) {
+    String systemPrompt = "You are a software engineer fixing a logical bug. " +
+                          "Modify the provided source code to make the failing test pass. " +
+                          "Return ONLY the updated Java code.";
+    
+    String userPrompt = "Bug: " + bugDescription + "\n" +
+                       "Failing Test Logs: " + testFailureLogs + "\n" +
+                       "Source Code: \n" + sourceCode;
+                       
+            OpenAiChatModel model = OpenAiChatModel.builder()
+                    .apiKey(OPENAI_API_KEY)
+                    .modelName("gpt-4o")
+                    .temperature(0.1)
+                    .build();
+                return model.generate(
+                        dev.langchain4j.data.message.SystemMessage.from(systemPrompt),
+                        dev.langchain4j.data.message.UserMessage.from(userPrompt)
+                ).content().text().trim();
+    }
+
+    
+    public String askLLMToCreateTest(String bugDescription) {
+    String systemPrompt = "You are an expert QA Engineer writing JUnit 5 tests. " +
+                          "Write a reproducing test case based on this bug report. " +
+                          "Return ONLY valid Java test code without markdown code blocks.";
+    
+            OpenAiChatModel model = OpenAiChatModel.builder()
+                    .apiKey(OPENAI_API_KEY)
+                    .modelName("gpt-4o")
+                    .temperature(0.1)
+                    .build();
+    // Pass bugDescription to your existing LLM interaction engine
+            return model.generate(
+                        dev.langchain4j.data.message.SystemMessage.from(systemPrompt),
+                        dev.langchain4j.data.message.UserMessage.from(userPrompt)
+                ).content().text().trim();
+}
+
+    
     public static void orchestrateFullLifecycle(String bugDescription, String repoFullName, String cloneUrl, String targetBranch) throws Exception {
         Path workspaceDir = Files.createTempDirectory("agent-polyglot-workspace-");
         File gitRootWorkspace = workspaceDir.toFile();
