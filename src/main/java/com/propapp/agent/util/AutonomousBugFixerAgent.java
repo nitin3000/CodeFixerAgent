@@ -52,7 +52,7 @@ public class AutonomousBugFixerAgent {
     // Pass bugDescription to your existing LLM interaction engine
             return model.generate(
                         dev.langchain4j.data.message.SystemMessage.from(systemPrompt),
-                        dev.langchain4j.data.message.UserMessage.from(userPrompt)
+                        dev.langchain4j.data.message.UserMessage.from(bugDescription)
                 ).content().text().trim();
 }
 
