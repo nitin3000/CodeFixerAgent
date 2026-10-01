@@ -15,7 +15,8 @@ public class WebhookAgentController {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    private ResponseEntity<String> handleCompilationError(
+    @PostMapping("/github")
+    public ResponseEntity<String> handleGitHubWebhook(
             @RequestBody String payload,
             @RequestHeader("X-GitHub-Event") String eventType) {
         try {
@@ -54,8 +55,12 @@ public class WebhookAgentController {
                 CompletableFuture.runAsync(() -> {
                     try {
                         System.out.println("🚀 Background thread spun up. Launching self-healing orchestration loop...");
-                        AutonomousBugFixerAgent.orchestrateFullLifecycle(finalBugDesc, finalRepo, finalUrl, finalBranch);
-                        System.out.println("🏁 Background thread successfully completed full lifecycle loop.");
+                        if ("fix_bug".equals(payload.getAction())) {
+                            AutonomousBugFixerAgent.orchestrateFullLifecycle(finalBugDesc, finalRepo, finalUrl, finalBranch);
+                        } else {
+                            AutonomousBugFixerAgent.orchestrateFullLifecycle(finalBugDesc, finalRepo, finalUrl, finalBranch);
+                        }
+                    System.out.println("🏁 Background thread successfully completed full lifecycle loop.");
                     } catch (Exception e) {
                         System.err.println("❌ Critical failure inside autonomous background orchestration worker thread: " + e.getMessage());
                         e.printStackTrace();
@@ -75,10 +80,4 @@ public class WebhookAgentController {
         }
     }
             
-    @PostMapping("/github")
-    public ResponseEntity<String> handleGitHubWebhook(
-            @RequestBody String payload,
-            @RequestHeader("X-GitHub-Event") String eventType) {
-        return handleCompilationError(payload, eventType);
-    }
 }
