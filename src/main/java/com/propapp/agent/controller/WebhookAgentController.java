@@ -15,11 +15,9 @@ public class WebhookAgentController {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    @PostMapping("/github")
-    public ResponseEntity<String> handleGitHubWebhook(
+    private ResponseEntity<String> handleCompilationError(
             @RequestBody String payload,
             @RequestHeader("X-GitHub-Event") String eventType) {
-
         try {
             if (!"issues".equalsIgnoreCase(eventType)) {
                 return ResponseEntity.ok("Event ignored: Not an issue event.");
@@ -75,5 +73,12 @@ public class WebhookAgentController {
             System.err.println("❌ Error parsing webhook payload: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error processing payload.");
         }
+    }
+            
+    @PostMapping("/github")
+    public ResponseEntity<String> handleGitHubWebhook(
+            @RequestBody String payload,
+            @RequestHeader("X-GitHub-Event") String eventType) {
+        return handleCompilationError(payload, eventType);
     }
 }
