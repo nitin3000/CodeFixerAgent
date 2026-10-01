@@ -55,7 +55,7 @@ public class WebhookAgentController {
                 CompletableFuture.runAsync(() -> {
                     try {
                         System.out.println("🚀 Background thread spun up. Launching self-healing orchestration loop...");
-                        if ("fix_bug".equals(payload.getAction())) {
+                        if ("fix_bug".equals("dummy")) {
                             AutonomousBugFixerAgent.orchestrateFullLifecycle(finalBugDesc, finalRepo, finalUrl, finalBranch);
                         } else {
                             AutonomousBugFixerAgent.orchestrateFullLifecycle(finalBugDesc, finalRepo, finalUrl, finalBranch);
